@@ -1,0 +1,37 @@
+name: test and benchmark
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  Benchmark:
+    name: Test and Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up PostgreSQL
+        uses: ikalnytskyi/action-setup-postgres@v8
+        id: postgres
+
+      - run: psql ${{ steps.postgres.outputs.connection-uri }} -f ./pgmq.sql
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+
+      - name: Run tests and benchmarks
+        uses: sanbei101/go-bench-pprof-action@v1
+        with:
+          top: 10
+          mem: true
+        env:
+          DATABASE_URL: ${{ steps.postgres.outputs.connection-uri }}
