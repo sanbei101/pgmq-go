@@ -57,7 +57,7 @@ func newBenchQueue(b *testing.B) string {
 	b.Helper()
 	queue := fmt.Sprintf("%s_%d", benchQueuePrefix, time.Now().UnixNano())
 	ctx := context.Background()
-	if err := CreateQueue(ctx, benchDB, queue); err != nil {
+	if err := CreateUnloggedQueue(ctx, benchDB, queue); err != nil {
 		b.Fatalf("create queue: %v", err)
 	}
 	b.Cleanup(func() {
