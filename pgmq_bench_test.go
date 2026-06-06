@@ -281,11 +281,22 @@ func BenchmarkRoundTrip_SendReadDelete(b *testing.B) {
 }
 
 func BenchmarkRoundTrip_SendReadDeleteBatch(b *testing.B) {
-	const batchSize = 1000
+	b.Run("Batch 1000", func(b *testing.B) {
+		batchSendReadDelete(b, 1000)
+	})
+	b.Run("Batch 5000", func(b *testing.B) {
+		batchSendReadDelete(b, 5000)
+	})
+	b.Run("Batch 10000", func(b *testing.B) {
+		batchSendReadDelete(b, 10000)
+	})
+}
+
+func batchSendReadDelete(b *testing.B, batchSize int) {
 	queue := newBenchQueue(b)
 	ctx := context.Background()
-
 	msgs := sampleMsgs(batchSize)
+
 	b.ResetTimer()
 	for b.Loop() {
 		msgIDs, err := SendBatch(ctx, benchDB, queue, msgs)
