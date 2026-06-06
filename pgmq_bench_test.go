@@ -135,14 +135,17 @@ func benchSendBatch(b *testing.B, size int) {
 func BenchmarkRead(b *testing.B) {
 	queue := newBenchQueue(b)
 	ctx := context.Background()
-	seedMessages(b, queue, b.N)
+	seedMessages(b, queue, 1000)
 
 	b.ResetTimer()
 	for b.Loop() {
 		_, err := Read(ctx, benchDB, queue, 30)
 		if err != nil {
 			if errors.Is(err, ErrNoRows) {
-				break
+				b.StopTimer()
+				seedMessages(b, queue, 1000)
+				b.StartTimer()
+				continue
 			}
 			b.Fatal(err)
 		}
@@ -178,18 +181,19 @@ func benchReadBatch(b *testing.B, size int) {
 }
 
 // --- Pop benchmarks ---
-
 func BenchmarkPop(b *testing.B) {
 	queue := newBenchQueue(b)
 	ctx := context.Background()
-	seedMessages(b, queue, b.N)
-
+	seedMessages(b, queue, 1000)
 	b.ResetTimer()
 	for b.Loop() {
 		_, err := Pop(ctx, benchDB, queue)
 		if err != nil {
 			if errors.Is(err, ErrNoRows) {
-				break
+				b.StopTimer()
+				seedMessages(b, queue, 1000)
+				b.StartTimer()
+				continue
 			}
 			b.Fatal(err)
 		}
@@ -330,7 +334,7 @@ func BenchmarkSend_Parallel(b *testing.B) {
 func BenchmarkRead_Parallel(b *testing.B) {
 	queue := newBenchQueue(b)
 	ctx := context.Background()
-	seedMessages(b, queue, b.N)
+	seedMessages(b, queue, 1000)
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -338,7 +342,10 @@ func BenchmarkRead_Parallel(b *testing.B) {
 			_, err := Read(ctx, benchDB, queue, 30)
 			if err != nil {
 				if errors.Is(err, ErrNoRows) {
-					return
+					b.StopTimer()
+					seedMessages(b, queue, 1000)
+					b.StartTimer()
+					continue
 				}
 				b.Error(err)
 				return
