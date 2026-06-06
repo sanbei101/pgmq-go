@@ -154,7 +154,7 @@ func SendBatchWithDelay(ctx context.Context, db DB, queue string, msgs []jsontex
 	}
 	defer rows.Close()
 
-	var msgIDs []int64
+	msgIDs := make([]int64, 0, len(msgs))
 	for rows.Next() {
 		var msgID int64
 		err = rows.Scan(&msgID)
@@ -183,7 +183,7 @@ func SendBatchWithDelayTimestamp(
 	}
 	defer rows.Close()
 
-	var msgIDs []int64
+	msgIDs := make([]int64, 0, len(msgs))
 	for rows.Next() {
 		var msgID int64
 		err = rows.Scan(&msgID)
@@ -320,7 +320,7 @@ func ArchiveBatch(ctx context.Context, db DB, queue string, msgIDs []int64) ([]i
 	}
 	defer rows.Close()
 
-	var archived []int64
+	archived := make([]int64, 0, len(msgIDs))
 	for rows.Next() {
 		var n int64
 		if err := rows.Scan(&n); err != nil {
@@ -355,7 +355,7 @@ func DeleteBatch(ctx context.Context, db DB, queue string, msgIDs []int64) ([]in
 	}
 	defer rows.Close()
 
-	var deleted []int64
+	deleted := make([]int64, 0, len(msgIDs))
 	for rows.Next() {
 		var n int64
 		if err := rows.Scan(&n); err != nil {
