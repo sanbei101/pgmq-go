@@ -30,11 +30,6 @@ func TestMain(m *testing.M) {
 	}
 	defer pool.Close()
 
-	if err := CreatePGMQExtension(ctx, pool); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create pgmq extension: %v\n", err)
-		os.Exit(1)
-	}
-
 	benchDB = pool
 	code := m.Run()
 
