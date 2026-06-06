@@ -300,7 +300,7 @@ func BenchmarkRoundTrip_SendReadDeleteBatch(b *testing.B) {
 		if len(readMsgs) == 0 {
 			continue
 		}
-		var readIDs []int64
+		readIDs := make([]int64, 0, len(readMsgs))
 		for _, m := range readMsgs {
 			readIDs = append(readIDs, m.MsgID)
 		}
