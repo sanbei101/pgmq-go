@@ -35,3 +35,4 @@ jobs:
           mem: true
         env:
           DATABASE_URL: ${{ steps.postgres.outputs.connection-uri }}
+          GOEXPERIMENT: jsonv2
