@@ -2,7 +2,7 @@ package pgmq
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
@@ -23,8 +23,8 @@ type Message struct {
 	// VT is "visibility time". The UTC timestamp at which the message will
 	// be available for reading again.
 	VT      time.Time
-	Message json.RawMessage
-	Headers json.RawMessage // Only supported in pgmq-pg17 and above
+	Message jsontext.Value
+	Headers jsontext.Value // Only supported in pgmq-pg17 and above
 }
 
 type DB interface {
@@ -98,13 +98,13 @@ func DropQueue(ctx context.Context, db DB, queue string) error {
 
 // Send sends a single message to a queue. The message id, unique to the
 // queue, is returned.
-func Send(ctx context.Context, db DB, queue string, msg json.RawMessage) (int64, error) {
+func Send(ctx context.Context, db DB, queue string, msg jsontext.Value) (int64, error) {
 	return SendWithDelay(ctx, db, queue, msg, 0)
 }
 
 // SendWithDelay sends a single message to a queue with a delay. The delay
 // is specified in seconds. The message id, unique to the queue, is returned.
-func SendWithDelay(ctx context.Context, db DB, queue string, msg json.RawMessage, delay int) (int64, error) {
+func SendWithDelay(ctx context.Context, db DB, queue string, msg jsontext.Value, delay int) (int64, error) {
 	var msgID int64
 	err := db.
 		QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2, $3::int)", queue, msg, delay).
@@ -119,7 +119,13 @@ func SendWithDelay(ctx context.Context, db DB, queue string, msg json.RawMessage
 // SendWithDelayTimestamp sends a single message to a queue with a delay. The
 // delay is specified as a timestamp. The message id, unique to the queue, is
 // returned. Only supported in pgmq-pg17 and above.
-func SendWithDelayTimestamp(ctx context.Context, db DB, queue string, msg json.RawMessage, delay time.Time) (int64, error) {
+func SendWithDelayTimestamp(
+	ctx context.Context,
+	db DB,
+	queue string,
+	msg jsontext.Value,
+	delay time.Time,
+) (int64, error) {
 	var msgID int64
 	err := db.
 		QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2, $3::timestamptz)", queue, msg, delay).
@@ -133,14 +139,14 @@ func SendWithDelayTimestamp(ctx context.Context, db DB, queue string, msg json.R
 
 // SendBatch sends a batch of messages to a queue. The message ids, unique to
 // the queue, are returned.
-func SendBatch(ctx context.Context, db DB, queue string, msgs []json.RawMessage) ([]int64, error) {
+func SendBatch(ctx context.Context, db DB, queue string, msgs []jsontext.Value) ([]int64, error) {
 	return SendBatchWithDelay(ctx, db, queue, msgs, 0)
 }
 
 // SendBatchWithDelay sends a batch of messages to a queue with a delay. The
 // delay is specified in seconds. The message ids, unique to the queue, are
 // returned.
-func SendBatchWithDelay(ctx context.Context, db DB, queue string, msgs []json.RawMessage, delay int) ([]int64, error) {
+func SendBatchWithDelay(ctx context.Context, db DB, queue string, msgs []jsontext.Value, delay int) ([]int64, error) {
 	rows, err := db.Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3::int)", queue, msgs, delay)
 	if err != nil {
 		return nil, wrapPostgresError(err)
@@ -163,7 +169,13 @@ func SendBatchWithDelay(ctx context.Context, db DB, queue string, msgs []json.Ra
 // SendBatchWithDelayTimestamp sends a batch of messages to a queue with a
 // delay. The delay is specified as a timestamp. The message ids, unique to
 // the queue, are returned.
-func SendBatchWithDelayTimestamp(ctx context.Context, db DB, queue string, msgs []json.RawMessage, delay time.Time) ([]int64, error) {
+func SendBatchWithDelayTimestamp(
+	ctx context.Context,
+	db DB,
+	queue string,
+	msgs []jsontext.Value,
+	delay time.Time,
+) ([]int64, error) {
 	rows, err := db.Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3::timestamptz)", queue, msgs, delay)
 	if err != nil {
 		return nil, wrapPostgresError(err)
@@ -221,7 +233,7 @@ func Read(ctx context.Context, db DB, queue string, vt int64) (*Message, error) 
 // messages that are returned are made invisible for the duration of the
 // visibility timeout (vt) in seconds. If vt is 0 it will be set to the
 // default value, vtDefault.
-func ReadBatch(ctx context.Context, db DB, queue string, vt int64, numMsgs int64) ([]*Message, error) {
+func ReadBatch(ctx context.Context, db DB, queue string, vt, numMsgs int64) ([]*Message, error) {
 	if vt == 0 {
 		vt = vtDefault
 	}
@@ -356,7 +368,7 @@ func DeleteBatch(ctx context.Context, db DB, queue string, msgIDs []int64) ([]in
 
 // SetVisibilityTimeout sets the visibility timeout of a message to a specified time duration in the future.
 // Returns the record of the message that was updated.
-func SetVisibilityTimeout(ctx context.Context, db DB, queue string, msgID int64, vt int64) (*Message, error) {
+func SetVisibilityTimeout(ctx context.Context, db DB, queue string, msgID, vt int64) (*Message, error) {
 	var msg Message
 
 	rows, err := db.Query(ctx, "SELECT * FROM pgmq.set_vt($1, $2::bigint, $3::int)", queue, msgID, vt)
