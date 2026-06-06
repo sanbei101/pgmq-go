@@ -206,7 +206,7 @@ func SendBatchWithDelayTimestamp(
 // messages are invisible, an ErrNoRows errors is returned. If a message is
 // returned, it is made invisible for the duration of the visibility timeout
 // (vt) in seconds.
-func Read(ctx context.Context, db DB, queue string, vt int64) (Message, error) {
+func Read(ctx context.Context, db DB, queue string, vt int64) (*Message, error) {
 	if vt == 0 {
 		vt = vtDefault
 	}
@@ -214,12 +214,12 @@ func Read(ctx context.Context, db DB, queue string, vt int64) (Message, error) {
 	var msg Message
 	rows, err := db.Query(ctx, "SELECT * FROM pgmq.read($1, $2, $3)", queue, vt, 1)
 	if err != nil {
-		return msg, wrapPostgresError(err)
+		return nil, wrapPostgresError(err)
 	}
 	defer rows.Close()
 
 	if !rows.Next() {
-		return msg, ErrNoRows
+		return nil, ErrNoRows
 	}
 
 	fields := rows.FieldDescriptions()
@@ -230,17 +230,17 @@ func Read(ctx context.Context, db DB, queue string, vt int64) (Message, error) {
 	}
 
 	if err != nil {
-		return msg, wrapPostgresError(err)
+		return nil, wrapPostgresError(err)
 	}
 
-	return msg, nil
+	return &msg, nil
 }
 
 // ReadBatch reads a specified number of messages from the queue. Any
 // messages that are returned are made invisible for the duration of the
 // visibility timeout (vt) in seconds. If vt is 0 it will be set to the
 // default value, vtDefault.
-func ReadBatch(ctx context.Context, db DB, queue string, vt, numMsgs int64) ([]Message, error) {
+func ReadBatch(ctx context.Context, db DB, queue string, vt, numMsgs int64) ([]*Message, error) {
 	if vt == 0 {
 		vt = vtDefault
 	}
@@ -254,19 +254,20 @@ func ReadBatch(ctx context.Context, db DB, queue string, vt, numMsgs int64) ([]M
 	fields := rows.FieldDescriptions()
 	hasHeaders := len(fields) > 6
 
-	msgs := make([]Message, 0, numMsgs)
+	msgSlice := make([]Message, numMsgs)
+	msgs := make([]*Message, 0, numMsgs)
 
 	for rows.Next() {
-		var msg Message
+		idx := len(msgs)
 		if hasHeaders {
-			err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.LastReadAt, &msg.VT, &msg.Message, &msg.Headers)
+			err = rows.Scan(&msgSlice[idx].MsgID, &msgSlice[idx].ReadCount, &msgSlice[idx].EnqueuedAt, &msgSlice[idx].LastReadAt, &msgSlice[idx].VT, &msgSlice[idx].Message, &msgSlice[idx].Headers)
 		} else {
-			err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.LastReadAt, &msg.VT, &msg.Message)
+			err = rows.Scan(&msgSlice[idx].MsgID, &msgSlice[idx].ReadCount, &msgSlice[idx].EnqueuedAt, &msgSlice[idx].LastReadAt, &msgSlice[idx].VT, &msgSlice[idx].Message)
 		}
 		if err != nil {
 			return nil, wrapPostgresError(err)
 		}
-		msgs = append(msgs, msg)
+		msgs = append(msgs, &msgSlice[idx])
 	}
 	if err := rows.Err(); err != nil {
 		return nil, wrapPostgresError(err)
@@ -279,16 +280,16 @@ func ReadBatch(ctx context.Context, db DB, queue string, vt, numMsgs int64) ([]M
 // Similar to Read and ReadBatch if no messages are available an ErrNoRows is
 // returned. Unlike these methods, the visibility timeout does not apply.
 // This is because the message is immediately deleted.
-func Pop(ctx context.Context, db DB, queue string) (Message, error) {
+func Pop(ctx context.Context, db DB, queue string) (*Message, error) {
 	var msg Message
 	rows, err := db.Query(ctx, "SELECT * FROM pgmq.pop($1)", queue)
 	if err != nil {
-		return msg, wrapPostgresError(err)
+		return nil, wrapPostgresError(err)
 	}
 	defer rows.Close()
 
 	if !rows.Next() {
-		return msg, ErrNoRows
+		return nil, ErrNoRows
 	}
 
 	fields := rows.FieldDescriptions()
@@ -299,10 +300,10 @@ func Pop(ctx context.Context, db DB, queue string) (Message, error) {
 	}
 
 	if err != nil {
-		return msg, wrapPostgresError(err)
+		return nil, wrapPostgresError(err)
 	}
 
-	return msg, nil
+	return &msg, nil
 }
 
 // Archive moves a message from the queue table to the archive table by its
@@ -385,17 +386,17 @@ func DeleteBatch(ctx context.Context, db DB, queue string, msgIDs []int64) ([]in
 
 // SetVisibilityTimeout sets the visibility timeout of a message to a specified time duration in the future.
 // Returns the record of the message that was updated.
-func SetVisibilityTimeout(ctx context.Context, db DB, queue string, msgID, vt int64) (Message, error) {
+func SetVisibilityTimeout(ctx context.Context, db DB, queue string, msgID, vt int64) (*Message, error) {
 	var msg Message
 
 	rows, err := db.Query(ctx, "SELECT * FROM pgmq.set_vt($1, $2::bigint, $3::int)", queue, msgID, vt)
 	if err != nil {
-		return msg, wrapPostgresError(err)
+		return nil, wrapPostgresError(err)
 	}
 	defer rows.Close()
 
 	if !rows.Next() {
-		return msg, ErrNoRows
+		return nil, ErrNoRows
 	}
 
 	fields := rows.FieldDescriptions()
@@ -406,10 +407,10 @@ func SetVisibilityTimeout(ctx context.Context, db DB, queue string, msgID, vt in
 	}
 
 	if err != nil {
-		return msg, wrapPostgresError(err)
+		return nil, wrapPostgresError(err)
 	}
 
-	return msg, nil
+	return &msg, nil
 }
 
 func wrapPostgresError(err error) error {
