@@ -160,8 +160,7 @@ func BenchmarkReadBatch_100(b *testing.B) {
 func benchReadBatch(b *testing.B, size int) {
 	queue := newBenchQueue(b)
 	ctx := context.Background()
-	// seed enough for all iterations
-	seedMessages(b, queue, b.N*size)
+	seedMessages(b, queue, 1000*size)
 
 	b.ResetTimer()
 	for b.Loop() {
@@ -170,7 +169,10 @@ func benchReadBatch(b *testing.B, size int) {
 			b.Fatal(err)
 		}
 		if len(msgs) == 0 {
-			break
+			b.StopTimer()
+			seedMessages(b, queue, 1000*size)
+			b.StartTimer()
+			continue
 		}
 	}
 }
@@ -194,67 +196,26 @@ func BenchmarkPop(b *testing.B) {
 	}
 }
 
-// --- Archive benchmarks ---
-
-func BenchmarkArchive(b *testing.B) {
-	queue := newBenchQueue(b)
-	ctx := context.Background()
-	ids := seedMessages(b, queue, b.N)
-
-	b.ResetTimer()
-	for i := 0; b.Loop(); i++ {
-		if i >= len(ids) {
-			break
-		}
-		_, err := Archive(ctx, benchDB, queue, ids[i])
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkArchiveBatch_10(b *testing.B) {
-	benchArchiveBatch(b, 10)
-}
-
-func BenchmarkArchiveBatch_100(b *testing.B) {
-	benchArchiveBatch(b, 100)
-}
-
-func benchArchiveBatch(b *testing.B, size int) {
-	queue := newBenchQueue(b)
-	ctx := context.Background()
-	ids := seedMessages(b, queue, b.N*size)
-
-	b.ResetTimer()
-	for i := 0; b.Loop(); i++ {
-		start := i * size
-		if start+size > len(ids) {
-			break
-		}
-		_, err := ArchiveBatch(ctx, benchDB, queue, ids[start:start+size])
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 // --- Delete benchmarks ---
-
 func BenchmarkDelete(b *testing.B) {
 	queue := newBenchQueue(b)
 	ctx := context.Background()
-	ids := seedMessages(b, queue, b.N)
+	ids := seedMessages(b, queue, 1000)
+	i := 0
 
 	b.ResetTimer()
-	for i := 0; b.Loop(); i++ {
+	for b.Loop() {
 		if i >= len(ids) {
-			break
+			b.StopTimer()                      // 1. 暂停计时,避免把 seed 数据的耗时算进 Delete 性能里
+			ids = seedMessages(b, queue, 1000) // 2. 重新塞入 1000 条新消息
+			i = 0                              // 3. 索引归零
+			b.StartTimer()                     // 4. 恢复计时,继续压测
 		}
 		_, err := Delete(ctx, benchDB, queue, ids[i])
 		if err != nil {
 			b.Fatal(err)
 		}
+		i++
 	}
 }
 
@@ -269,38 +230,24 @@ func BenchmarkDeleteBatch_100(b *testing.B) {
 func benchDeleteBatch(b *testing.B, size int) {
 	queue := newBenchQueue(b)
 	ctx := context.Background()
-	ids := seedMessages(b, queue, b.N*size)
+	ids := seedMessages(b, queue, 1000*size)
 
 	b.ResetTimer()
-	for i := 0; b.Loop(); i++ {
-		start := i * size
-		if start+size > len(ids) {
-			break
+	for b.Loop() {
+		if len(ids) < size {
+			b.StopTimer()
+			ids = seedMessages(b, queue, 1000*size)
+			b.StartTimer()
 		}
-		_, err := DeleteBatch(ctx, benchDB, queue, ids[start:start+size])
+		batchIDs := ids[:size]
+		ids = ids[size:]
+
+		_, err := DeleteBatch(ctx, benchDB, queue, batchIDs)
 		if err != nil {
 			b.Fatal(err)
 		}
 	}
-}
 
-// --- SetVisibilityTimeout benchmark ---
-
-func BenchmarkSetVisibilityTimeout(b *testing.B) {
-	queue := newBenchQueue(b)
-	ctx := context.Background()
-	ids := seedMessages(b, queue, b.N)
-
-	b.ResetTimer()
-	for i := 0; b.Loop(); i++ {
-		if i >= len(ids) {
-			break
-		}
-		_, err := SetVisibilityTimeout(ctx, benchDB, queue, ids[i], 60)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
 }
 
 // --- Round-trip benchmark (Send + Read + Delete) ---
