@@ -103,17 +103,16 @@ func BenchmarkSend(b *testing.B) {
 	}
 }
 
-// --- SendBatch benchmarks ---
-func BenchmarkSendBatch_10(b *testing.B) {
-	benchSendBatch(b, 10)
-}
-
-func BenchmarkSendBatch_100(b *testing.B) {
-	benchSendBatch(b, 100)
-}
-
-func BenchmarkSendBatch_1000(b *testing.B) {
-	benchSendBatch(b, 1000)
+func BenchmarkSendBatch(b *testing.B) {
+	b.Run("Batch 10", func(b *testing.B) {
+		benchSendBatch(b, 10)
+	})
+	b.Run("Batch 100", func(b *testing.B) {
+		benchSendBatch(b, 100)
+	})
+	b.Run("Batch 1000", func(b *testing.B) {
+		benchSendBatch(b, 1000)
+	})
 }
 
 func benchSendBatch(b *testing.B, size int) {
@@ -131,7 +130,6 @@ func benchSendBatch(b *testing.B, size int) {
 }
 
 // --- Read benchmarks ---
-
 func BenchmarkRead(b *testing.B) {
 	queue := newBenchQueue(b)
 	ctx := context.Background()
@@ -152,12 +150,16 @@ func BenchmarkRead(b *testing.B) {
 	}
 }
 
-func BenchmarkReadBatch_10(b *testing.B) {
-	benchReadBatch(b, 10)
-}
-
-func BenchmarkReadBatch_100(b *testing.B) {
-	benchReadBatch(b, 100)
+func BenchmarkReadBatch(b *testing.B) {
+	b.Run("Batch 10", func(b *testing.B) {
+		benchReadBatch(b, 10)
+	})
+	b.Run("Batch 100", func(b *testing.B) {
+		benchReadBatch(b, 100)
+	})
+	b.Run("Batch 1000", func(b *testing.B) {
+		benchReadBatch(b, 1000)
+	})
 }
 
 func benchReadBatch(b *testing.B, size int) {
@@ -223,12 +225,16 @@ func BenchmarkDelete(b *testing.B) {
 	}
 }
 
-func BenchmarkDeleteBatch_10(b *testing.B) {
-	benchDeleteBatch(b, 10)
-}
-
-func BenchmarkDeleteBatch_100(b *testing.B) {
-	benchDeleteBatch(b, 100)
+func BenchmarkDeleteBatch(b *testing.B) {
+	b.Run("Batch 10", func(b *testing.B) {
+		benchDeleteBatch(b, 10)
+	})
+	b.Run("Batch 100", func(b *testing.B) {
+		benchDeleteBatch(b, 100)
+	})
+	b.Run("Batch 1000", func(b *testing.B) {
+		benchDeleteBatch(b, 1000)
+	})
 }
 
 func benchDeleteBatch(b *testing.B, size int) {
@@ -297,30 +303,50 @@ func batchSendReadDelete(b *testing.B, batchSize int) {
 	ctx := context.Background()
 	msgs := sampleMsgs(batchSize)
 
+	var iterations int64
+	var sendElapsed time.Duration
+	var readElapsed time.Duration
+	var deleteElapsed time.Duration
+
 	b.ResetTimer()
 	for b.Loop() {
+		iterations++
+
+		start := time.Now()
 		msgIDs, err := SendBatch(ctx, benchDB, queue, msgs)
+		sendElapsed += time.Since(start)
 		if err != nil {
 			b.Fatal(err)
 		}
 
+		start = time.Now()
 		readMsgs, err := ReadBatch(ctx, benchDB, queue, 30, int64(batchSize))
+		readElapsed += time.Since(start)
 		if err != nil {
 			b.Fatal(err)
 		}
-		if len(readMsgs) == 0 {
-			continue
+		if len(readMsgs) != batchSize {
+			b.Fatalf("read_batch returned %d messages, want %d", len(readMsgs), batchSize)
 		}
 		readIDs := make([]int64, 0, len(readMsgs))
 		for _, m := range readMsgs {
 			readIDs = append(readIDs, m.MsgID)
 		}
 
+		start = time.Now()
 		_, err = DeleteBatch(ctx, benchDB, queue, readIDs)
+		deleteElapsed += time.Since(start)
 		if err != nil {
 			b.Fatal(err)
 		}
 		_ = msgIDs
+	}
+
+	if iterations > 0 {
+		totalMessages := float64(iterations * int64(batchSize))
+		b.ReportMetric(float64(sendElapsed.Nanoseconds())/totalMessages, "send-ns/msg")
+		b.ReportMetric(float64(readElapsed.Nanoseconds())/totalMessages, "read-ns/msg")
+		b.ReportMetric(float64(deleteElapsed.Nanoseconds())/totalMessages, "delete-ns/msg")
 	}
 }
 
