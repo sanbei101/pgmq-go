@@ -18,6 +18,29 @@ jobs:
         uses: ikalnytskyi/action-setup-postgres@v8
         id: postgres
 
+      - name: Optimize PostgreSQL Configuration
+        run: |
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET max_connections = '200';"
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET shared_buffers = '1792MB';"
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET effective_cache_size = '5376MB';"
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET maintenance_work_mem = '448MB';"
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET checkpoint_completion_target = '0.9';"
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET wal_buffers = '16MB';"
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET default_statistics_target = '100';"
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET random_page_cost = '1.1';"
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET effective_io_concurrency = '200';"
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET work_mem = '7939kB';"
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET huge_pages = 'off';"
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET jit = 'off';"
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET min_wal_size = '1GB';"
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET max_wal_size = '4GB';"
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET wal_compression = 'lz4';"
+          psql ${{ env.PGURL }} -c "ALTER SYSTEM SET io_method = 'io_uring';"
+          
+          sudo systemctl restart postgresql
+        env:
+          PGURL: ${{ steps.postgres.outputs.connection-uri }}
+
       - run: psql ${{ steps.postgres.outputs.connection-uri }} -f ./pgmq.sql
 
       - name: Checkout code
